@@ -23,6 +23,40 @@ curl -fsSL https://raw.githubusercontent.com/Tunging/doc-screening/main/install.
 
 Works anywhere `curl` (or `wget`) and a `~/.claude/skills/`-compatible agent live: **Claude Code** scans that dir natively; **omp (Oh-My-Pi)** auto-discovers it too (`enableClaudeUser` defaults to true). The script writes only `~/.claude/skills/<skill>/SKILL.md` files (or `./.claude/skills/<skill>/SKILL.md` with `--project`).
 
+## New project in four steps
+
+Skills live in `~/.claude/skills/` (machine-wide), so step 0 happens **once per machine** — every new project then starts at step 1 with zero setup.
+
+**1. First screening — discover the current state, get a rules draft**
+
+Open a Claude Code / omp session in the new project and paste the stage-1 prompt from [Use it](#use-it-two-sentences-per-cycle). With no `AGENTS.md` the run uses defaults and appends a **suggested AGENTS.md draft** to the report. A repo without a `docs/` tree is handled automatically: root `.md` files plus first-level dirs become the formal corpus.
+
+**2. Lock in conventions (do this before cleaning)**
+
+```text
+用 doc-cleanup 技能处理 _screening/screening-<日期>.md：确认 adopt-AGENTS-draft 这一条，把草案写入根目录 AGENTS.md。
+```
+
+```bash
+ln -s AGENTS.md CLAUDE.md   # one rules file shared by both agents
+```
+
+Want different conventions (transient dir name, archive location, whitelist)? Edit the override keys in `AGENTS.md` — every later run follows them.
+
+**3. Clean up the existing docs**
+
+Review the report, then confirm rows in one sentence (the stage-2 prompt in [Use it](#use-it-two-sentences-per-cycle)). `delete` means **move** into `_screening/trash-<date>/` — nothing is hard-deleted, and the manifest lands in `_screening/cleanup-<date>.md`. Keep transient output out of git:
+
+```bash
+echo '_screening/' >> .gitignore
+```
+
+**4. Make it recurring (optional)**
+
+Re-run the stage-1 sentence any time (with `AGENTS.md` present it skips the draft), or schedule it — see the Paseo example in [Use it](#use-it-two-sentences-per-cycle). Weekly rhythm: read the report → reply confirming rows → manifest comes back.
+
+**Team sharing**: either each teammate runs the install command (machine scope), or run `install.sh --project` once in the repo so `.claude/skills/` ships with git — conventions then travel with the repository.
+
 ## Use it (two sentences per cycle)
 
 Start a Claude Code or omp session in the target directory.
