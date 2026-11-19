@@ -1,5 +1,7 @@
 # doc-screening
 
+> English | [中文](README.zh-CN.md)
+
 > One-sentence install; one sentence to deploy a **two-stage AI documentation workflow** into any Markdown knowledge base or `docs/` tree: **read-only screening → human confirms → confirmed cleanup**.
 
 AI agents produce documents fast — plans, audits, reports, rewrite logs — and they accumulate in the wrong places. This repo ships two agent skills that work as a pair:
@@ -121,7 +123,8 @@ doc-screening/
 ├── install.sh        # one-sentence installer (both skills, user or project scope)
 ├── AGENTS.example.md # annotated override file template
 ├── LICENSE           # MIT
-└── README.md
+├── README.md         # this file
+└── README.zh-CN.md   # 简体中文
 ```
 
 ## Design notes
