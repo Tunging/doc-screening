@@ -1,15 +1,15 @@
 # doc-screening
 
-> One-sentence install; one sentence to deploy a **read-only AI documentation screening workflow** into any Markdown knowledge base or `docs/` tree.
+> One-sentence install; one sentence to deploy a **two-stage AI documentation workflow** into any Markdown knowledge base or `docs/` tree: **read-only screening → human confirms → confirmed cleanup**.
 
-AI agents produce documents fast — plans, audits, reports, rewrite logs — and they accumulate in the wrong places. This skill gives any agent (Claude Code, Oh-My-Pi/omp, or anything that reads agent skills) a repeatable screening playbook:
+AI agents produce documents fast — plans, audits, reports, rewrite logs — and they accumulate in the wrong places. This repo ships two agent skills that work as a pair:
 
-- **orphan docs** — never linked from any index
-- **transient residue** — audit/report/log files polluting root or formal dirs
-- **frontmatter / tag violations** — against your template or controlled vocabulary
-- **duplicates, drift, low quality** — semantic sampling with cited evidence
+| Skill | Stage | Blast radius |
+|---|---|---|
+| **doc-screening** | propose: orphans, transient residue, frontmatter/tag violations, duplicates, drift, low quality | one report file |
+| **doc-cleanup** | dispose: archive/update/merge/register/adopt-rules — **only rows a human confirmed** | confirmed items + one manifest |
 
-**Hard rule: the agent never edits, moves, or deletes anything.** The only write is one report into a transient dir. Humans decide; agents propose.
+**Design rule: agents propose, humans decide.** Screening never touches content files; cleanup never hard-deletes (archive-first) and refuses anything not explicitly confirmed.
 
 ## Install (one sentence)
 
@@ -18,25 +18,44 @@ curl -fsSL https://raw.githubusercontent.com/Tunging/doc-screening/main/install.
 ```
 
 - Team-shared, versioned with the repo: add `--project`
+- Single skill: add `--only doc-screening` (or `doc-cleanup`)
 - Remove: append `--uninstall` (plus `--project` if installed that way)
 
-Works anywhere `curl` (or `wget`) and a `~/.claude/skills/`-compatible agent live: **Claude Code** scans that dir natively; **omp (Oh-My-Pi)** auto-discovers it too (`enableClaudeUser` defaults to true — no omp-specific install needed). The script only writes one file: `~/.claude/skills/doc-screening/SKILL.md` (or `./.claude/skills/doc-screening/SKILL.md` with `--project`).
+Works anywhere `curl` (or `wget`) and a `~/.claude/skills/`-compatible agent live: **Claude Code** scans that dir natively; **omp (Oh-My-Pi)** auto-discovers it too (`enableClaudeUser` defaults to true). The script writes only `~/.claude/skills/<skill>/SKILL.md` files (or `./.claude/skills/<skill>/SKILL.md` with `--project`).
 
-## Deploy in a specific working directory (give this to the agent)
+## Use it (two sentences per cycle)
 
-After installing, start a Claude Code or omp session in the target directory and paste **one sentence**:
+Start a Claude Code or omp session in the target directory.
+
+**Stage 1 — screening** (paste one sentence):
 
 ```text
-用 doc-screening 技能对本目录做一次文档初筛：读根目录 AGENTS.md/CLAUDE.md 取约定（没有就用技能默认值），按技能步骤执行只读巡检，报告写入 _screening/screening-<今天日期>.md，除报告外不改动任何文件。
+用 doc-screening 技能对本目录做一次文档初筛：读根目录 AGENTS.md/CLAUDE.md 取约定（没有就用技能默认值，并在报告末尾附 AGENTS.md 草案），按技能步骤执行只读巡检，报告写入 _screening/screening-<今天日期>.md，除报告外不改动任何文件。
+```
+
+The report lists findings as rows: `File | Suggested action | Rule | Evidence`, with actions `delete / archive / update / merge-to <target> / register-in-index` and rules `orphan · residue · frontmatter · tags · stale · duplicate · drift · low-quality`. If the project has no `AGENTS.md`, the report also ends with a **suggested AGENTS.md draft** synthesized from this run's findings.
+
+English:
+
+```text
+Run the doc-screening skill on this directory: read AGENTS.md/CLAUDE.md for conventions (fall back to defaults and append an AGENTS.md draft to the report if absent), do a read-only screening per the skill, write the report to _screening/screening-<today>.md, and change nothing else.
+```
+
+**Stage 2 — cleanup** (you review the report, then paste one sentence naming the confirmed items):
+
+```text
+用 doc-cleanup 技能处理 _screening/screening-<日期>.md：确认 docs/b.md（登记索引）和 _audit.md（删除=归档）这两条，其他条目不动；执行后在 _screening/cleanup-<日期>.md 输出变更清单。
 ```
 
 English:
 
 ```text
-Run the doc-screening skill on this directory: read AGENTS.md/CLAUDE.md for conventions (fall back to the skill's defaults if absent), do a read-only screening per the skill, write the report to _screening/screening-<today>.md, and change nothing else.
+Run the doc-cleanup skill on _screening/screening-<date>.md: I confirm the docs/b.md (register-in-index) and _audit.md (archive) rows; leave everything else untouched; write the change manifest to _screening/cleanup-<date>.md.
 ```
 
-The agent loads the skill, screens, and writes one report. For recurring runs, wire the same prompt into your scheduler of choice — e.g. Paseo:
+Cleanup semantics: `delete`/`archive` **move** files into an archive dir (default `_screening/trash-YYYY-MM-DD/`) — never hard-delete; `update` applies only the evidence-backed edits from the row; `merge-to <target>` appends unique content then archives the source; `register-in-index` adds the missing link; `adopt-AGENTS-draft` writes the report's AGENTS.md draft to the repo root. Anything ambiguous is skipped with a reason, never improvised. Every change lands in a manifest.
+
+For recurring screening, wire the stage-1 prompt into your scheduler — e.g. Paseo:
 
 ```bash
 paseo schedule create --provider claude --cron "0 9 * * 1" --cwd /path/to/repo \
@@ -45,7 +64,7 @@ paseo schedule create --provider claude --cron "0 9 * * 1" --cwd /path/to/repo \
 
 ## Adapt it to your project (optional, one file)
 
-The skill works zero-config. To give it your conventions, add overrides to the root `AGENTS.md`:
+The skills work zero-config. To pin your conventions, add overrides to the root `AGENTS.md`:
 
 ```markdown
 ## Doc screening overrides
@@ -56,24 +75,16 @@ The skill works zero-config. To give it your conventions, add overrides to the r
 - _screening_expiry_days: 30       # report cleanup line (default 30)
 ```
 
-See [`AGENTS.example.md`](AGENTS.example.md) for a complete annotated example. Without this file the agent notes "defaults used" in the report header.
-
-## The report
-
-| Field | Meaning |
-|---|---|
-| Suggested action | `delete / archive / update / merge-to <target> / register-in-index` |
-| Rule | `orphan · residue · frontmatter · tags · stale · duplicate · drift · low-quality` |
-| Evidence | file + line/quote — semantic claims must cite; uncertain items get ⚠️ and drop to medium priority |
-
-Priorities: **High** (this week) / **Medium** / statistics line. Stale reports past the expiry line are listed as "suggest cleanup" and only executed after human confirmation.
+See [`AGENTS.example.md`](AGENTS.example.md) for a complete annotated example. Cleanup additionally reads `_screening_archive_dir` (default `_screening/trash-YYYY-MM-DD/`).
 
 ## Repo layout
 
 ```
 doc-screening/
-├── SKILL.md          # the agent-playbook (the whole workflow lives here)
-├── install.sh        # one-sentence installer (user or project scope)
+├── skills/
+│   ├── doc-screening/SKILL.md   # stage 1: read-only screening playbook
+│   └── doc-cleanup/SKILL.md     # stage 2: confirmed-item execution playbook
+├── install.sh        # one-sentence installer (both skills, user or project scope)
 ├── AGENTS.example.md # annotated override file template
 ├── LICENSE           # MIT
 └── README.md
@@ -81,9 +92,9 @@ doc-screening/
 
 ## Design notes
 
-- **Read-only by default.** The #1 failure mode of doc automation is an agent confidently "cleaning up" real content. This workflow's blast radius is one report file.
-- **Deterministic first, semantic second.** Link/-frontmatter/tag checks are mechanical (cheap, no false "AI vibes"); semantic checks are sampled (≤20 files) and require evidence.
-- **Convention injection, not convention assumption.** The same skill serves a Unity Obsidian vault, a plain `docs/` repo, or a bare directory — the root `AGENTS.md` carries project specifics; the skill carries the procedure.
+- **Read-only screening, confirmation-gated cleanup.** The #1 failure mode of doc automation is an agent confidently "cleaning up" real content. Stage 1's blast radius is one report; stage 2 acts only on rows a human named, archives instead of deleting, and logs a manifest.
+- **Deterministic first, semantic second.** Link/frontmatter/tag checks are mechanical (cheap, few false positives); semantic checks are sampled (≤20 files) and require cited evidence.
+- **Convention injection, not convention assumption.** The same pair serves a Unity Obsidian vault, a plain `docs/` repo, or a bare directory — root `AGENTS.md` carries project specifics; when absent, screening bootstraps a draft from its own findings.
 
 ## License
 

@@ -71,9 +71,26 @@ title: Doc Screening YYYY-MM-DD
 Action vocabulary: `delete / archive / update / merge-to <target> / register-in-index`.
 Rule short names: `orphan` `residue` `frontmatter` `tags` `stale` `duplicate` `drift` `low-quality`.
 
+### 5. Bootstrap draft (only when root AGENTS.md/CLAUDE.md is absent)
+
+Append a final section to the report:
+
+````markdown
+## Suggested AGENTS.md draft
+
+> No root AGENTS.md was found. Copy this into the repo root to lock in the
+> conventions used for this screening, then re-run screening to use them.
+````
+
+The draft contains: the transient dir used, the formal dirs detected this run, an explicit whitelist built from this run's findings (index/README/rules files), the expiry days, and 3–5 writing rules synthesized from actual violations found this run (e.g. residue rule if residue was found, dedupe-before-create if duplicates were found). It uses the same override keys the skill reads (`_screening_dir`, `_screening_formal_dirs`, `_screening_whitelist`, `_screening_expiry_days`). A human copies it to `AGENTS.md` — or approves `adopt-AGENTS-draft` in doc-cleanup. This section is **part of the report**, not a file write.
+
 ## Hard boundaries
 
 - **Never modify, move, or delete anything** except writing the one report
 - Whitelist files (rules, index, README, templates) never enter "suggest delete"
 - Semantic claims must cite evidence (file + line/quote); uncertain items get ⚠️ and drop to medium priority
 - Stale transient files are listed as "suggest cleanup" — **human confirms before execution**
+
+## Companion skill
+
+Execution of confirmed report items is handled by **doc-cleanup** (`skills/doc-cleanup/SKILL.md`): screening proposes, cleanup disposes — only on human-confirmed rows, with a manifest. If a user asks to "apply/clean up per the report", hand off to that skill instead of acting here.

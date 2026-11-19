@@ -26,6 +26,10 @@
 # (default: 30). Cleanup still requires human confirmation.
 - _screening_expiry_days: 30
 
+# (doc-cleanup only) Where confirmed delete/archive items are MOVED.
+# Default: _screening/trash-YYYY-MM-DD/. Physical purge is manual.
+- _screening_archive_dir: 99-归档
+
 ## (Optional) writing rules the screening will check against
 
 # 1. Transient agent artifacts (plans, audits, logs) go ONLY into the transient dir.

@@ -1,33 +1,36 @@
 #!/usr/bin/env bash
-# doc-screening skill installer
+# doc-screening + doc-cleanup skill installer
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Tunging/doc-screening/main/install.sh | bash            # user scope
-#   curl -fsSL ... | bash -s -- --project                                                              # this repo only
+#   curl -fsSL https://raw.githubusercontent.com/Tunging/doc-screening/main/install.sh | bash            # user scope, both skills
+#   curl -fsSL ... | bash -s -- --project                                                               # this repo only
+#   curl -fsSL ... | bash -s -- --only doc-screening                                                    # single skill
 #   curl -fsSL ... | bash -s -- --uninstall [--project]
 set -euo pipefail
 
 REPO="${DOC_SCREENING_REPO:-Tunging/doc-screening}"
 BRANCH="${DOC_SCREENING_BRANCH:-main}"
-RAW="${DOC_SCREENING_BASE_URL:-https://raw.githubusercontent.com/${REPO}/${BRANCH}}/SKILL.md"
+BASE="${DOC_SCREENING_BASE_URL:-https://raw.githubusercontent.com/${REPO}/${BRANCH}}"
+ALL_SKILLS="doc-screening doc-cleanup"
 
 SCOPE="user"
 UNINSTALL=0
-for arg in "$@"; do
-  case "$arg" in
+ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --project)  SCOPE="project" ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help)
-      sed -n '2,7p' "$0"; exit 0 ;;
-    *) echo "unknown arg: $arg" >&2; exit 2 ;;
+    --only) shift; ONLY="${1:-}" ;;
+    -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
-if [ "$SCOPE" = "project" ]; then
-  DEST_DIR="$PWD/.claude/skills/doc-screening"
-else
-  DEST_DIR="${HOME}/.claude/skills/doc-screening"
-fi
-DEST="$DEST_DIR/SKILL.md"
+case "$ONLY" in
+  "")              SKILLS=(${ALL_SKILLS}) ;;
+  doc-screening|doc-cleanup) SKILLS=($ONLY) ;;
+  *) echo "--only must be doc-screening or doc-cleanup" >&2; exit 2 ;;
+esac
 
 fetch() {
   if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"
@@ -35,34 +38,48 @@ fetch() {
   else echo "need curl or wget" >&2; exit 1; fi
 }
 
-if [ "$UNINSTALL" = 1 ]; then
-  if [ -f "$DEST" ]; then rm "$DEST" && rmdir "$DEST_DIR" 2>/dev/null || true
-    echo "removed $DEST"
-  else
-    echo "not found: $DEST"; exit 1
+install_one() { # $1 = skill name
+  local name="$1"
+  local dest_dir dest tmp
+  if [ "$SCOPE" = "project" ]; then dest_dir="$PWD/.claude/skills/$name"
+  else dest_dir="${HOME}/.claude/skills/$name"; fi
+  dest="$dest_dir/SKILL.md"
+
+  tmp=$(mktemp)
+  fetch "$BASE/skills/$name/SKILL.md" > "$tmp" || { echo "download failed: $BASE/skills/$name/SKILL.md" >&2; rm -f "$tmp"; return 1; }
+  if [ ! -s "$tmp" ] || ! grep -q "^name: $name" "$tmp"; then
+    echo "invalid SKILL.md from $BASE/skills/$name/SKILL.md" >&2; rm -f "$tmp"; return 1
   fi
-  exit 0
-fi
+  mkdir -p "$dest_dir"
+  mv "$tmp" "$dest"
+  echo "installed: $dest"
+}
 
-TMP=$(mktemp)
-trap 'rm -f "$TMP"' EXIT
-fetch "$RAW" > "$TMP" || { echo "download failed: $RAW" >&2; exit 1; }
+uninstall_one() { # $1 = skill name
+  local name="$1"
+  local dest_dir
+  if [ "$SCOPE" = "project" ]; then dest_dir="$PWD/.claude/skills/$name"
+  else dest_dir="${HOME}/.claude/skills/$name"; fi
+  if [ -f "$dest_dir/SKILL.md" ]; then
+    rm "$dest_dir/SKILL.md" && rmdir "$dest_dir" 2>/dev/null || true
+    echo "removed $dest_dir/SKILL.md"
+  else
+    echo "not found: $dest_dir/SKILL.md"
+  fi
+}
 
-# sanity: file must be the skill, not an error page
-if [ ! -s "$TMP" ] || ! grep -q '^name: doc-screening' "$TMP"; then
-  echo "download failed or invalid SKILL.md from $RAW" >&2
-  exit 1
-fi
-
-mkdir -p "$DEST_DIR"
-mv "$TMP" "$DEST"
-
-echo "installed: $DEST  (repo ${REPO}@${BRANCH})"
-echo
-echo "Claude Code : already available in new sessions (skills dir scanned at startup)."
-echo "omp         : auto-discovers ~/.claude/skills; in a running TUI run /reload-plugins."
-echo "Verify      : claude -> /skills list, omp -> /extensions > Skills; ask for 文档巡检 / docs screening."
-if [ "$SCOPE" = "project" ]; then
+FAIL=0
+if [ "$UNINSTALL" = 1 ]; then
+  for s in "${SKILLS[@]}"; do uninstall_one "$s"; done
+else
+  for s in "${SKILLS[@]}"; do install_one "$s" || FAIL=1; done
   echo
-  echo "Project scope: commit $DEST_DIR to share with the team, or add '.claude/skills/' to .gitignore for personal use."
+  echo "Claude Code : new sessions pick these up automatically (skills dir scanned at startup)."
+  echo "omp         : auto-discovers ~/.claude/skills; in a running TUI run /reload-plugins."
+  echo "Workflow    : 1) run doc-screening (read-only report) -> 2) review -> 3) tell doc-cleanup which rows are confirmed."
+  if [ "$SCOPE" = "project" ]; then
+    echo
+    echo "Project scope: commit .claude/skills/ to share with the team, or gitignore it for personal use."
+  fi
 fi
+exit $FAIL
